@@ -10,9 +10,10 @@ import { fileURLToPath } from 'url';
 
 dotenv.config();
 
-// pdf-parse is CJS — use createRequire
+// pdf-parse is CJS — import via the lib path to avoid its test-runner
+// side-effect which crashes the server on startup in ESM context
 const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
+const pdfParse = require('pdf-parse/lib/pdf-parse.js');
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
