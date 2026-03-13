@@ -37,9 +37,21 @@ export default function App() {
       <header className="app-header">
         <div className="header-inner">
           <div className="header-logo">
-            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-              <rect width="28" height="28" rx="6" fill="#2563eb"/>
-              <path d="M7 8h14M7 12h10M7 16h12M7 20h8" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+            <svg width="32" height="32" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="16" cy="14" r="9" fill="#7c3aed"/>
+              <circle cx="16" cy="14" r="5.5" fill="#a78bfa"/>
+              <circle cx="48" cy="14" r="9" fill="#7c3aed"/>
+              <circle cx="48" cy="14" r="5.5" fill="#a78bfa"/>
+              <circle cx="32" cy="36" r="24" fill="#7c3aed"/>
+              <ellipse cx="32" cy="44" rx="11" ry="8" fill="#a78bfa"/>
+              <circle cx="24" cy="32" r="3.5" fill="white"/>
+              <circle cx="40" cy="32" r="3.5" fill="white"/>
+              <circle cx="25" cy="33" r="2" fill="#1e1b4b"/>
+              <circle cx="41" cy="33" r="2" fill="#1e1b4b"/>
+              <circle cx="26" cy="32" r="0.8" fill="white"/>
+              <circle cx="42" cy="32" r="0.8" fill="white"/>
+              <ellipse cx="32" cy="42" rx="4" ry="2.5" fill="#4c1d95"/>
+              <path d="M 27 46 Q 32 50 37 46" stroke="#4c1d95" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
             </svg>
             <span className="header-title">Case Study Buddy</span>
           </div>
