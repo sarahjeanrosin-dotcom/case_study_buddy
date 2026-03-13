@@ -1,4 +1,23 @@
 import { useState, useRef } from 'react';
+import * as pdfjsLib from 'pdfjs-dist';
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+
+async function parsePDFInBrowser(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const pages = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    pages.push(content.items.map(item => item.str).join(' '));
+  }
+  const text = pages.join('\n\n').replace(/[ \t]+/g, ' ').trim();
+  if (!text || text.length < 100) {
+    throw new Error('Could not extract text from this PDF. It may be a scanned image — try the URL option instead.');
+  }
+  return text.substring(0, 25000);
+}
 
 const LENGTH_OPTIONS = [
   { value: 'concise', label: 'Concise', desc: 'Short, slide-friendly' },
@@ -36,13 +55,7 @@ export default function InputSection({ onGenerate }) {
         text = json.text;
       } else {
         if (!pdfFile) throw new Error('Please select a PDF file');
-        const formData = new FormData();
-        formData.append('pdf', pdfFile);
-        const res = await fetch('/api/parse-pdf', { method: 'POST', body: formData });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || 'Failed to parse PDF');
-        if (!json.text || json.text.length < 100) throw new Error('Could not extract text from this PDF. Make sure it contains selectable text (not a scanned image).');
-        text = json.text;
+        text = await parsePDFInBrowser(pdfFile);
       }
 
       await onGenerate({ text, length });

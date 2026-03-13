@@ -1,7 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import multer from 'multer';
-import { createRequire } from 'module';
 import * as cheerio from 'cheerio';
 import dotenv from 'dotenv';
 import Anthropic from '@anthropic-ai/sdk';
@@ -10,15 +8,9 @@ import { fileURLToPath } from 'url';
 
 dotenv.config();
 
-// pdf-parse is CJS — import via the lib path to avoid its test-runner
-// side-effect which crashes the server on startup in ESM context
-const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse/lib/pdf-parse.js');
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -71,47 +63,7 @@ app.post('/api/fetch-url', async (req, res) => {
   }
 });
 
-// ── Parse uploaded PDF ────────────────────────────────────────────────────────
-app.post('/api/parse-pdf', (req, res) => {
-  upload.single('pdf')(req, res, async (uploadErr) => {
-    // Handle multer errors (file too large, wrong type, etc.)
-    if (uploadErr) {
-      return res.status(400).json({ error: `Upload failed: ${uploadErr.message}` });
-    }
-    if (!req.file) {
-      return res.status(400).json({ error: 'No PDF file provided' });
-    }
-
-    try {
-      // pdf-parse can throw or emit unhandled rejections on malformed PDFs —
-      // wrap in a manual Promise race so we always respond
-      const data = await Promise.race([
-        pdfParse(req.file.buffer, { max: 0 }), // max:0 = parse all pages
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('PDF parsing timed out after 30s')), 30000)
-        ),
-      ]);
-
-      const text = (data.text || '')
-        .replace(/[ \t]+/g, ' ')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-
-      if (!text || text.length < 50) {
-        return res.status(422).json({
-          error: 'Could not extract text from this PDF. It may be a scanned image or have copy protection. Try exporting it as a text-based PDF first.',
-        });
-      }
-
-      res.json({ text: text.substring(0, 25000), pages: data.numpages });
-    } catch (err) {
-      console.error('PDF parse error:', err.message);
-      res.status(500).json({
-        error: `Failed to parse PDF: ${err.message}. Try a different PDF or copy-paste the text into a URL fetch instead.`,
-      });
-    }
-  });
-});
+// PDF parsing moved to client-side (pdfjs-dist in browser)
 
 // ── Generate structured content via Claude ───────────────────────────────────
 app.post('/api/generate', async (req, res) => {
