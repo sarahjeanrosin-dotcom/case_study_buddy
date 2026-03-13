@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import LogoPanel from './LogoPanel.jsx';
-import { downloadPDF } from '../utils/exportUtils.js';
+import { downloadPDF, downloadZip } from '../utils/exportUtils.js';
 
 // ── Editable array bucket ─────────────────────────────────────────────────────
 function ArrayBucket({ label, items, onChange }) {
@@ -116,11 +116,19 @@ function TextBucket({ label, value, onChange, multiline = false }) {
 export default function OutputPage({ initialData, onReset }) {
   const [data, setData] = useState(initialData);
   const [logoDataUrl, setLogoDataUrl] = useState(null);
+  const [zipping, setZipping] = useState(false);
 
   const set = (field) => (val) => setData(prev => ({ ...prev, [field]: val }));
 
-  const handleDownloadPDF = () => {
-    downloadPDF(data);
+  const handleDownloadPDF = () => downloadPDF(data);
+
+  const handleDownloadZip = async () => {
+    setZipping(true);
+    try {
+      await downloadZip(data, logoDataUrl);
+    } finally {
+      setZipping(false);
+    }
   };
 
   return (
@@ -183,8 +191,15 @@ export default function OutputPage({ initialData, onReset }) {
         <div className="export-card">
           <h3>Export</h3>
           <div className="export-actions">
-            <button className="btn btn-primary btn-full" onClick={handleDownloadPDF}>
-              ⬇ Download PDF
+            <button
+              className="btn btn-primary btn-full"
+              onClick={handleDownloadZip}
+              disabled={zipping}
+            >
+              {zipping ? <><span className="btn-spinner"></span> Packaging…</> : '⬇ Download ZIP'}
+            </button>
+            <button className="btn btn-secondary btn-full" onClick={handleDownloadPDF}>
+              ⬇ PDF only
             </button>
             {logoDataUrl && (
               <a
@@ -192,12 +207,14 @@ export default function OutputPage({ initialData, onReset }) {
                 href={logoDataUrl}
                 download="logo-recolored.png"
               >
-                ⬇ Download Logo PNG
+                ⬇ Logo PNG only
               </a>
             )}
           </div>
           <p className="export-hint">
-            {!logoDataUrl && 'Fetch and recolor the logo above to enable logo download.'}
+            {logoDataUrl
+              ? 'ZIP includes the PDF + recolored logo PNG.'
+              : 'ZIP includes the PDF. Fetch a logo above to include it too.'}
           </p>
         </div>
 

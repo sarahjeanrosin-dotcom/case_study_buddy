@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import JSZip from 'jszip';
 
 // ── PDF Export ────────────────────────────────────────────────────────────────
 
@@ -79,9 +80,7 @@ function drawBullet(doc, y, text, color = DARK) {
   return y + 1;
 }
 
-export function downloadPDF(data) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-
+function _buildPDFContent(doc, data) {
   // ── Cover band ──
   doc.setFillColor(...BLUE);
   doc.rect(0, 0, PAGE_W, 38, 'F');
@@ -236,11 +235,51 @@ export function downloadPDF(data) {
     doc.text(`Page ${p} of ${totalPages}`, PAGE_W - MARGIN, PAGE_H - 7, { align: 'right' });
   }
 
-  const fileName = data.customer
-    ? `${data.customer.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-case-study.pdf`
-    : 'case-study.pdf';
+}
 
-  doc.save(fileName);
+export function downloadPDF(data) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  _buildPDFContent(doc, data);
+  const fileName = data.customer
+    ? `${data.customer.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-case-study`
+    : 'case-study';
+  doc.save(`${fileName}.pdf`);
+}
+
+export function getPDFBlob(data) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  _buildPDFContent(doc, data);
+  return doc.output('blob');
+}
+
+// ── ZIP download ──────────────────────────────────────────────────────────────
+export async function downloadZip(data, logoDataUrl) {
+  const zip = new JSZip();
+
+  const baseName = data.customer
+    ? data.customer.replace(/[^a-z0-9]/gi, '-').toLowerCase()
+    : 'case-study';
+
+  // Add PDF
+  const pdfBlob = getPDFBlob(data);
+  zip.file(`${baseName}-case-study.pdf`, pdfBlob);
+
+  // Add logo PNG if available
+  if (logoDataUrl) {
+    const base64 = logoDataUrl.split(',')[1];
+    zip.file('logo-recolored.png', base64, { base64: true });
+  }
+
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+  const url = URL.createObjectURL(zipBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${baseName}-assets.zip`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ── Logo recoloring via Canvas ────────────────────────────────────────────────
