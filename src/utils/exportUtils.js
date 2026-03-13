@@ -319,11 +319,19 @@ export function recolorLogoCanvas(src, hexColor) {
         // Perceptual luminance: 0 = black, 1 = white
         const lum = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
 
-        // Dark pixels → target color; bright pixels → white
+        // Near-white pixels → transparent (smooth fade lum 0.80→0.95)
+        if (lum >= 0.95) {
+          px[i + 3] = 0;
+          continue;
+        }
+        if (lum > 0.80) {
+          px[i + 3] = Math.round(alpha * (0.95 - lum) / 0.15);
+        }
+
+        // Dark pixels → target color; mid pixels → tinted
         px[i]     = Math.round(tr + (255 - tr) * lum);
         px[i + 1] = Math.round(tg + (255 - tg) * lum);
         px[i + 2] = Math.round(tb + (255 - tb) * lum);
-        // alpha unchanged
       }
 
       ctx.putImageData(imageData, 0, 0);
