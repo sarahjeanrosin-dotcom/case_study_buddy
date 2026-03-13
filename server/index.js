@@ -170,30 +170,47 @@ RULES:
   }
 });
 
-// ── Proxy Clearbit logo to avoid CORS issues ──────────────────────────────────
+// ── Proxy logo to avoid CORS — tries Clearbit first, falls back to Google ────
 app.get('/api/logo', async (req, res) => {
   const { domain } = req.query;
   if (!domain) return res.status(400).json({ error: 'Domain is required' });
 
-  const logoUrl = `https://logo.clearbit.com/${domain.trim()}`;
+  const clean = domain.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
 
-  try {
-    const response = await fetch(logoUrl, {
-      signal: AbortSignal.timeout(8000),
+  const fetchWithTimeout = (url, ms = 8000) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
+    return fetch(url, {
+      signal: controller.signal,
       headers: { 'User-Agent': 'CaseStudyBuddy/1.0' },
-    });
+    }).finally(() => clearTimeout(timer));
+  };
 
-    if (!response.ok) return res.status(404).json({ error: 'Logo not found for this domain' });
+  const sources = [
+    `https://logo.clearbit.com/${clean}`,
+    `https://www.google.com/s2/favicons?domain=${clean}&sz=128`,
+  ];
 
-    const buffer = await response.arrayBuffer();
-    const contentType = response.headers.get('content-type') || 'image/png';
+  for (const url of sources) {
+    try {
+      const response = await fetchWithTimeout(url, 8000);
+      if (!response.ok) continue;
 
-    res.set('Content-Type', contentType);
-    res.set('Cache-Control', 'public, max-age=3600');
-    res.send(Buffer.from(buffer));
-  } catch (err) {
-    res.status(404).json({ error: 'Logo not found' });
+      const buffer = await response.arrayBuffer();
+      const contentType = response.headers.get('content-type') || 'image/png';
+
+      // Skip Google's generic globe icon (843 bytes)
+      if (url.includes('google.com') && buffer.byteLength < 900) continue;
+
+      res.set('Content-Type', contentType);
+      res.set('Cache-Control', 'public, max-age=3600');
+      return res.send(Buffer.from(buffer));
+    } catch {
+      continue;
+    }
   }
+
+  res.status(404).json({ error: `No logo found for "${clean}". Try a different domain.` });
 });
 
 // ── SPA fallback ──────────────────────────────────────────────────────────────
