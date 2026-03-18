@@ -7,14 +7,14 @@ export default function App() {
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
 
-  const handleGenerate = async ({ text, length }) => {
+  const handleGenerate = async ({ text, length, tone }) => {
     setStep('generating');
     setError(null);
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, length }),
+        body: JSON.stringify({ text, length, tone }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Generation failed');

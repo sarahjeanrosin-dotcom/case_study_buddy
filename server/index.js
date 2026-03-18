@@ -67,7 +67,7 @@ app.post('/api/fetch-url', async (req, res) => {
 
 // ── Generate structured content via Claude ───────────────────────────────────
 app.post('/api/generate', async (req, res) => {
-  const { text, length } = req.body;
+  const { text, length, tone } = req.body;
   if (!text) return res.status(400).json({ error: 'Text is required' });
 
   const lengthGuide = {
@@ -76,9 +76,18 @@ app.post('/api/generate', async (req, res) => {
     robust:  'DETAILED: 4-6 sentences for paragraph fields. Bullets: 15-25 words each.',
   };
 
+  const toneGuide = {
+    facts:        'TONE — Just the Facts: Sharp and clean. Lead with data and metrics. No filler words, no personality. State outcomes plainly. Avoid adjectives unless quantifying. Example style: "Reduced processing time by 40%. Eliminated manual reconciliation. Scaled to 10M records per day."',
+    punchy:       'TONE — Punchy Confidence: Short, punchy sentences. Active voice. Confident and slightly cheeky, but still professional. Don\'t hedge. Example style: "They had a mess. Now they don\'t. The team moved three times faster and never looked back."',
+    storytelling: 'TONE — Storytelling: Human, empathetic, narrative-driven. Write like you\'re telling someone\'s real story. Focus on real challenges, real people, real wins. Use "their team", "the company", "they discovered". Example style: "When the team inherited a decade of legacy debt, they knew something had to change. What they didn\'t expect was how quickly it could."',
+    strategic:    'TONE — Strategic Operator: Executive-level language. Smart, structured, quietly impressive. Use precise business language. Understated confidence. Example style: "The organization realigned its data infrastructure to eliminate operational bottlenecks, enabling the revenue team to accelerate pipeline velocity by 35%."',
+  };
+
   const prompt = `You are a marketing content specialist. Analyze the case study below and extract structured marketing content.
 
 OUTPUT LENGTH: ${length.toUpperCase()} — ${lengthGuide[length] || lengthGuide.strong}
+
+${toneGuide[tone] || toneGuide.punchy}
 
 CASE STUDY TEXT:
 ${text.substring(0, 20000)}
@@ -152,21 +161,136 @@ RULES:
   }
 });
 
-// ── Proxy logo to avoid CORS — tries Clearbit first, falls back to Google ────
+// ── Shared fetch helper ───────────────────────────────────────────────────────
+const fetchWithTimeout = (url, options = {}, ms = 8000) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+};
+
+// ── Proxy a single logo image (used by LogoPanel to render variants) ──────────
+app.get('/api/logo-proxy', async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ error: 'url param required' });
+
+  try {
+    const response = await fetchWithTimeout(url, { headers: { 'User-Agent': 'CaseStudyBuddy/1.0' } });
+    if (!response.ok) return res.status(404).json({ error: 'Image not found' });
+
+    const buffer = await response.arrayBuffer();
+    const contentType = response.headers.get('content-type') || 'image/png';
+    res.set('Content-Type', contentType);
+    res.set('Cache-Control', 'public, max-age=3600');
+    return res.send(Buffer.from(buffer));
+  } catch {
+    return res.status(404).json({ error: 'Failed to fetch image' });
+  }
+});
+
+// ── Return all available logo variants for a domain ───────────────────────────
+// Returns JSON array of { type, label, url } objects
+app.get('/api/logos', async (req, res) => {
+  const { domain } = req.query;
+  if (!domain) return res.status(400).json({ error: 'Domain is required' });
+
+  const clean = domain.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  const variants = [];
+
+  // ── Try Brandfetch API (if key configured) ──────────────────────────────────
+  const brandfetchKey = process.env.BRANDFETCH_API_KEY;
+  if (brandfetchKey) {
+    try {
+      const bfRes = await fetchWithTimeout(
+        `https://api.brandfetch.io/v2/brands/${encodeURIComponent(clean)}`,
+        { headers: { Authorization: `Bearer ${brandfetchKey}`, 'User-Agent': 'CaseStudyBuddy/1.0' } },
+        10000
+      );
+      if (bfRes.ok) {
+        const bfData = await bfRes.json();
+        const logos = bfData.logos || [];
+        for (const logo of logos) {
+          for (const format of (logo.formats || [])) {
+            if (!format.src) continue;
+            const isVector = format.format === 'svg';
+            const label = logo.type === 'icon' ? 'Icon' : logo.type === 'logo' ? 'Wordmark' : logo.type;
+            variants.push({
+              type:    logo.type,
+              label:   `${label}${isVector ? ' (SVG)' : ''}`,
+              url:     `/api/logo-proxy?url=${encodeURIComponent(format.src)}`,
+              width:   format.width,
+              height:  format.height,
+              source:  'brandfetch',
+            });
+          }
+        }
+      }
+    } catch {
+      // Brandfetch failed — fall through to free sources
+    }
+  }
+
+  // ── Always try Clearbit (icon) ──────────────────────────────────────────────
+  try {
+    const cbRes = await fetchWithTimeout(
+      `https://logo.clearbit.com/${clean}`,
+      { headers: { 'User-Agent': 'CaseStudyBuddy/1.0' } }
+    );
+    if (cbRes.ok) {
+      const buf = await cbRes.arrayBuffer();
+      if (buf.byteLength > 200) {
+        variants.push({
+          type:   'icon',
+          label:  'Icon (Clearbit)',
+          url:    `/api/logo-proxy?url=${encodeURIComponent(`https://logo.clearbit.com/${clean}`)}`,
+          source: 'clearbit',
+        });
+      }
+    }
+  } catch { /* skip */ }
+
+  // ── Google favicon fallback ─────────────────────────────────────────────────
+  if (variants.length === 0) {
+    try {
+      const gRes = await fetchWithTimeout(
+        `https://www.google.com/s2/favicons?domain=${clean}&sz=128`,
+        { headers: { 'User-Agent': 'CaseStudyBuddy/1.0' } }
+      );
+      if (gRes.ok) {
+        const buf = await gRes.arrayBuffer();
+        if (buf.byteLength > 900) {
+          variants.push({
+            type:   'icon',
+            label:  'Favicon',
+            url:    `/api/logo-proxy?url=${encodeURIComponent(`https://www.google.com/s2/favicons?domain=${clean}&sz=128`)}`,
+            source: 'google',
+          });
+        }
+      }
+    } catch { /* skip */ }
+  }
+
+  if (variants.length === 0) {
+    return res.status(404).json({ error: `No logo found for "${clean}". Try a different domain.` });
+  }
+
+  // Deduplicate by url
+  const seen = new Set();
+  const deduped = variants.filter(v => {
+    if (seen.has(v.url)) return false;
+    seen.add(v.url);
+    return true;
+  });
+
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.json(deduped);
+});
+
+// ── Legacy single-logo endpoint (kept for backwards compat) ───────────────────
 app.get('/api/logo', async (req, res) => {
   const { domain } = req.query;
   if (!domain) return res.status(400).json({ error: 'Domain is required' });
 
   const clean = domain.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-
-  const fetchWithTimeout = (url, ms = 8000) => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), ms);
-    return fetch(url, {
-      signal: controller.signal,
-      headers: { 'User-Agent': 'CaseStudyBuddy/1.0' },
-    }).finally(() => clearTimeout(timer));
-  };
 
   const sources = [
     `https://logo.clearbit.com/${clean}`,
@@ -175,13 +299,12 @@ app.get('/api/logo', async (req, res) => {
 
   for (const url of sources) {
     try {
-      const response = await fetchWithTimeout(url, 8000);
+      const response = await fetchWithTimeout(url, { headers: { 'User-Agent': 'CaseStudyBuddy/1.0' } });
       if (!response.ok) continue;
 
       const buffer = await response.arrayBuffer();
       const contentType = response.headers.get('content-type') || 'image/png';
 
-      // Skip Google's generic globe icon (843 bytes)
       if (url.includes('google.com') && buffer.byteLength < 900) continue;
 
       res.set('Content-Type', contentType);

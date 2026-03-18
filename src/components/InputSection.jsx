@@ -25,11 +25,19 @@ const LENGTH_OPTIONS = [
   { value: 'robust',  label: 'Robust',  desc: 'Fully detailed' },
 ];
 
+const TONE_OPTIONS = [
+  { value: 'facts',       label: 'Just the Facts',      desc: 'Sharp. Clean. No personality, just proof.' },
+  { value: 'punchy',      label: 'Punchy Confidence',   desc: 'Confident, slightly cheeky, but still professional.' },
+  { value: 'storytelling',label: 'Storytelling',         desc: 'Human, empathetic, grounded in real experience.' },
+  { value: 'strategic',   label: 'Strategic Operator',  desc: 'Smart, structured, quietly impressive.' },
+];
+
 export default function InputSection({ onGenerate }) {
   const [mode, setMode] = useState('url'); // 'url' | 'pdf'
   const [url, setUrl] = useState('');
   const [pdfFile, setPdfFile] = useState(null);
   const [length, setLength] = useState('strong');
+  const [tone, setTone] = useState('punchy');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const fileRef = useRef();
@@ -58,7 +66,7 @@ export default function InputSection({ onGenerate }) {
         text = await parsePDFInBrowser(pdfFile);
       }
 
-      await onGenerate({ text, length });
+      await onGenerate({ text, length, tone });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -189,6 +197,26 @@ export default function InputSection({ onGenerate }) {
                   />
                   <span className="length-label">{opt.label}</span>
                   <span className="length-desc">{opt.desc}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Tone selector */}
+          <div className="field">
+            <label>Tone</label>
+            <div className="tone-options">
+              {TONE_OPTIONS.map(opt => (
+                <label key={opt.value} className={`tone-option ${tone === opt.value ? 'selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="tone"
+                    value={opt.value}
+                    checked={tone === opt.value}
+                    onChange={() => setTone(opt.value)}
+                  />
+                  <span className="tone-label">{opt.label}</span>
+                  <span className="tone-desc">{opt.desc}</span>
                 </label>
               ))}
             </div>
