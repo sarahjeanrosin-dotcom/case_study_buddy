@@ -22,6 +22,16 @@
   to = "/.netlify/functions/logo"
   status = 200
 
+[[redirects]]
+  from = "/api/logos"
+  to = "/.netlify/functions/logos"
+  status = 200
+
+[[redirects]]
+  from = "/api/logo-proxy"
+  to = "/.netlify/functions/logo-proxy"
+  status = 200
+
 # SPA fallback
 [[redirects]]
   from = "/*"

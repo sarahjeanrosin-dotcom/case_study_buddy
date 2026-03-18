@@ -16,7 +16,7 @@ export const handler = async (event) => {
     return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
-  const { text, length } = JSON.parse(event.body || '{}');
+  const { text, length, tone } = JSON.parse(event.body || '{}');
   if (!text) {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Text is required' }) };
   }
@@ -27,9 +27,18 @@ export const handler = async (event) => {
     robust:  'DETAILED: 4-6 sentences for paragraph fields. Bullets: 15-25 words each.',
   };
 
+  const toneGuide = {
+    facts:        'TONE — Just the Facts: Sharp and clean. Lead with data and metrics. No filler words, no personality. State outcomes plainly. Avoid adjectives unless quantifying. Example style: "Reduced processing time by 40%. Eliminated manual reconciliation. Scaled to 10M records per day."',
+    punchy:       'TONE — Punchy Confidence: Write like a confident copywriter who has zero patience for corporate fluff. Short sentences. Fragments are fine. Active voice only. Start bullets with strong verbs. Lead with the result, then the so-what. Use contractions. A little swagger is good — but keep it professional. NO phrases like "leveraged", "utilized", "solution", "robust", or "seamless". Example style: "12,000 users. 8 locations. Zero physical key cards. They didn\'t phase it in — they flipped the switch and it worked."',
+    storytelling: 'TONE — Storytelling: Human, empathetic, narrative-driven. Write like you\'re telling someone\'s real story. Focus on real challenges, real people, real wins. Use "their team", "the company", "they discovered". Example style: "When the team inherited a decade of legacy debt, they knew something had to change. What they didn\'t expect was how quickly it could."',
+    strategic:    'TONE — Strategic Operator: Executive-level language. Smart, structured, quietly impressive. Use precise business language. Understated confidence. Example style: "The organization realigned its data infrastructure to eliminate operational bottlenecks, enabling the revenue team to accelerate pipeline velocity by 35%."',
+  };
+
   const prompt = `You are a marketing content specialist. Analyze the case study below and extract structured marketing content.
 
 OUTPUT LENGTH: ${(length || 'strong').toUpperCase()} — ${lengthGuide[length] || lengthGuide.strong}
+
+${toneGuide[tone] || toneGuide.punchy}
 
 CASE STUDY TEXT:
 ${text.substring(0, 20000)}
