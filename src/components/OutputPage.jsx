@@ -87,18 +87,19 @@ function QuotesBucket({ quotes, onChange }) {
 }
 
 // ── Text field bucket ─────────────────────────────────────────────────────────
-function TextBucket({ label, value, onChange, multiline = false }) {
+function TextBucket({ label, value, onChange, multiline = false, rows = 4, hint }) {
   return (
     <div className="bucket">
       <div className="bucket-header">
         <h3>{label}</h3>
+        {hint && <span className="bucket-hint">{hint}</span>}
       </div>
       {multiline ? (
         <textarea
           value={value}
           onChange={e => onChange(e.target.value)}
           className="bucket-textarea"
-          rows={4}
+          rows={rows}
         />
       ) : (
         <input
@@ -175,6 +176,15 @@ export default function OutputPage({ initialData, onReset }) {
           <QuotesBucket
             quotes={data.quotes || []}
             onChange={set('quotes')}
+          />
+
+          <TextBucket
+            label="Narrative Story"
+            hint="~1,400 words"
+            value={data.narrative || ''}
+            onChange={set('narrative')}
+            multiline
+            rows={32}
           />
         </div>
       </div>

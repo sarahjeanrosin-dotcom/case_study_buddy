@@ -361,6 +361,7 @@ body {
 }
 .bucket-header h3 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--blue); }
 .bucket-count { font-size: 11px; color: var(--text-light); background: var(--border); padding: 1px 7px; border-radius: 10px; }
+.bucket-hint { font-size: 11px; color: var(--text-light); }
 
 .bucket-input-full, .bucket-textarea {
   width: 100%;
