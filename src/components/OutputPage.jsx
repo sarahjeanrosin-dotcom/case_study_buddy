@@ -141,7 +141,13 @@ export default function OutputPage({ initialData, tone, onReset }) {
           quotes:            data.quotes,
         }),
       });
-      const json = await res.json();
+      const responseText = await res.text();
+      let json;
+      try {
+        json = JSON.parse(responseText);
+      } catch {
+        throw new Error(`HTTP ${res.status} — ${responseText.substring(0, 300)}`);
+      }
       if (!res.ok) throw new Error(json.error || 'Narrative generation failed');
       setData(prev => ({ ...prev, narrative: json.narrative }));
     } catch (err) {
