@@ -127,7 +127,7 @@ export default function OutputPage({ initialData, tone, onReset }) {
     setNarrativeLoading(true);
     setNarrativeError(null);
     try {
-      const res = await fetch('/api/generate-narrative', {
+      const res = await fetch('/.netlify/functions/generate-narrative', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
