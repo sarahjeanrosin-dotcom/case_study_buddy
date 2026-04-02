@@ -126,6 +126,8 @@ export default function OutputPage({ initialData, tone, onReset }) {
   const generateNarrative = async () => {
     setNarrativeLoading(true);
     setNarrativeError(null);
+    setData(prev => ({ ...prev, narrative: '' }));
+
     try {
       const res = await fetch('/.netlify/functions/generate-narrative', {
         method: 'POST',
@@ -141,18 +143,25 @@ export default function OutputPage({ initialData, tone, onReset }) {
           quotes:            data.quotes,
         }),
       });
-      const responseText = await res.text();
-      let json;
-      try {
-        json = JSON.parse(responseText);
-      } catch {
-        throw new Error(`HTTP ${res.status} — ${responseText.substring(0, 300)}`);
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status} — ${text.substring(0, 300)}`);
       }
-      if (!res.ok) throw new Error(json.error || 'Narrative generation failed');
-      setData(prev => ({ ...prev, narrative: json.narrative }));
+
+      // Switch to textarea immediately; text will stream in
+      setNarrativeLoading(false);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        setData(prev => ({ ...prev, narrative: (prev.narrative || '') + chunk }));
+      }
     } catch (err) {
       setNarrativeError(err.message);
-    } finally {
       setNarrativeLoading(false);
     }
   };

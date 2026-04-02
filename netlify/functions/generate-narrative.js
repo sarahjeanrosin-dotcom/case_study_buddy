@@ -1,12 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
 
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
-  'Content-Type': 'application/json',
 };
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const toneGuide = {
   facts:        'TONE — Just the Facts: Sharp and clean. Lead with data and metrics. No filler words, no personality. State outcomes plainly. Avoid adjectives unless quantifying.',
@@ -15,22 +14,39 @@ const toneGuide = {
   strategic:    'TONE — Strategic Operator: Executive-level language. Smart, structured, quietly impressive. Use precise business language. Understated confidence.',
 };
 
-export const handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 204, headers: CORS, body: '' };
+// New-format Netlify Function — supports streaming responses
+export default async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS });
   }
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method not allowed' }) };
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
   }
 
-  const { tone, customer, industry, challenge, use_case, business_outcomes, solutions, quotes } = JSON.parse(event.body || '{}');
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+      status: 400,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+
+  const { tone, customer, industry, challenge, use_case, business_outcomes, solutions, quotes } = body;
   if (!customer) {
-    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'customer field is required' }) };
+    return new Response(JSON.stringify({ error: 'customer field is required' }), {
+      status: 400,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
   }
 
   const outcomesText = (business_outcomes || []).map((o, i) => `  ${i + 1}. ${o}`).join('\n');
   const solutionsText = (solutions || []).map((s, i) => `  ${i + 1}. ${s}`).join('\n');
-  const quotesText = (quotes || []).map(q => `  "${q.text}" — ${q.attribution}`).join('\n');
+  const quotesText   = (quotes || []).map(q => `  "${q.text}" — ${q.attribution}`).join('\n');
 
   const prompt = `You are a marketing content specialist. Write a compelling case study narrative story of approximately 1,400 words.
 
@@ -69,26 +85,35 @@ RULES:
 - Plain text only — no markdown, no bullet points, no bold/italic
 - Output ONLY the narrative text. No preamble, no "Here is the narrative:", just the story.`;
 
-  try {
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      messages: [{ role: 'user', content: prompt }],
-    });
+  // Stream Claude's response directly back to the browser
+  const stream = new ReadableStream({
+    async start(controller) {
+      const enc = new TextEncoder();
+      try {
+        const claudeStream = anthropic.messages.stream({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }],
+        });
+        for await (const event of claudeStream) {
+          if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+            controller.enqueue(enc.encode(event.delta.text));
+          }
+        }
+      } catch (err) {
+        controller.enqueue(enc.encode(`\n\n[Error: ${err.message}]`));
+      } finally {
+        controller.close();
+      }
+    },
+  });
 
-    const textBlock = message.content.find(b => b.type === 'text');
-    if (!textBlock) throw new Error('No text response from Claude');
-
-    return {
-      statusCode: 200,
-      headers: CORS,
-      body: JSON.stringify({ narrative: textBlock.text.trim() }),
-    };
-  } catch (err) {
-    return {
-      statusCode: 500,
-      headers: CORS,
-      body: JSON.stringify({ error: `Narrative generation failed: ${err.message}` }),
-    };
-  }
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      ...CORS,
+      'Content-Type': 'text/plain; charset=utf-8',
+      'X-Accel-Buffering': 'no', // disable proxy buffering
+    },
+  });
 };
