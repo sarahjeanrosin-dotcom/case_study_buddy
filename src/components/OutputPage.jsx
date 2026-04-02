@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import LogoPanel from './LogoPanel.jsx';
 import { downloadPDF, downloadZip } from '../utils/exportUtils.js';
 
@@ -114,12 +114,44 @@ function TextBucket({ label, value, onChange, multiline = false, rows = 4, hint 
 }
 
 // ── Main output page ──────────────────────────────────────────────────────────
-export default function OutputPage({ initialData, onReset }) {
+export default function OutputPage({ initialData, tone, onReset }) {
   const [data, setData] = useState(initialData);
   const [logoDataUrl, setLogoDataUrl] = useState(null);
   const [zipping, setZipping] = useState(false);
+  const [narrativeLoading, setNarrativeLoading] = useState(true);
+  const [narrativeError, setNarrativeError] = useState(null);
 
   const set = (field) => (val) => setData(prev => ({ ...prev, [field]: val }));
+
+  const generateNarrative = async () => {
+    setNarrativeLoading(true);
+    setNarrativeError(null);
+    try {
+      const res = await fetch('/api/generate-narrative', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tone,
+          customer:          data.customer,
+          industry:          data.industry,
+          challenge:         data.challenge,
+          use_case:          data.use_case,
+          business_outcomes: data.business_outcomes,
+          solutions:         data.solutions,
+          quotes:            data.quotes,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Narrative generation failed');
+      setData(prev => ({ ...prev, narrative: json.narrative }));
+    } catch (err) {
+      setNarrativeError(err.message);
+    } finally {
+      setNarrativeLoading(false);
+    }
+  };
+
+  useEffect(() => { generateNarrative(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDownloadPDF = () => downloadPDF(data);
 
@@ -178,14 +210,30 @@ export default function OutputPage({ initialData, onReset }) {
             onChange={set('quotes')}
           />
 
-          <TextBucket
-            label="Narrative Story"
-            hint="~1,400 words"
-            value={data.narrative || ''}
-            onChange={set('narrative')}
-            multiline
-            rows={32}
-          />
+          <div className="bucket">
+            <div className="bucket-header">
+              <h3>Narrative Story</h3>
+              <span className="bucket-hint">~1,400 words</span>
+            </div>
+            {narrativeLoading ? (
+              <div className="narrative-loading">
+                <span className="btn-spinner"></span>
+                <span>Writing narrative…</span>
+              </div>
+            ) : narrativeError ? (
+              <div className="narrative-error">
+                <p>Narrative generation failed: {narrativeError}</p>
+                <button className="btn btn-secondary" onClick={generateNarrative}>Retry</button>
+              </div>
+            ) : (
+              <textarea
+                value={data.narrative || ''}
+                onChange={e => set('narrative')(e.target.value)}
+                className="bucket-textarea"
+                rows={32}
+              />
+            )}
+          </div>
         </div>
       </div>
 

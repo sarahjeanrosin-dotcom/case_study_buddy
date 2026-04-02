@@ -18,6 +18,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/generate-narrative"
+  to = "/.netlify/functions/generate-narrative"
+  status = 200
+
+[[redirects]]
   from = "/api/logo"
   to = "/.netlify/functions/logo"
   status = 200

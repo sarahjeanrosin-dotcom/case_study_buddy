@@ -121,8 +121,7 @@ Return ONLY valid JSON. No markdown fences, no explanation, just the JSON object
       "attribution": "Full Name, Title, Company (if available)"
     }
   ],
-  "domain": "companydomain.com",
-  "narrative": "A compelling ~1,400-word story written in the specified tone that brings the full case study to life. Use plain-text section headers (no markdown symbols) to organize the story into four acts: 1) The Before (set the scene — who the company is, what challenge they faced, why it mattered), 2) The Turning Point (what changed, why they chose this solution, what the decision looked like), 3) The Build (how implementation went, what the team did, any real friction or wins), 4) The After (specific outcomes, what the team says now, what this unlocks going forward). Draw on all specific details, numbers, and quotes from the case study. Write at approximately 1,400 words total."
+  "domain": "companydomain.com"
 }
 
 RULES:
@@ -130,13 +129,12 @@ RULES:
 - solutions: EXACTLY 4 items
 - how_statements: 1 or more items, each MUST begin with the word "How"
 - quotes: include ALL meaningful testimonial-style quotes from the text; empty array [] if none found
-- domain: your best inference of the customer company's website domain (for logo lookup)
-- narrative: approximately 1,400 words (1,300–1,500). The length/bullet rules above do NOT apply to narrative — it always gets the full word count. Apply the specified tone throughout.`;
+- domain: your best inference of the customer company's website domain (for logo lookup)`;
 
   try {
     const message = await anthropic.messages.create({
       model: 'claude-opus-4-6',
-      max_tokens: 8192,
+      max_tokens: 4096,
       thinking: { type: 'adaptive' },
       messages: [{ role: 'user', content: prompt }],
     });
@@ -156,7 +154,6 @@ RULES:
     if (!Array.isArray(data.solutions)) data.solutions = [];
     if (!Array.isArray(data.how_statements)) data.how_statements = [];
     if (!Array.isArray(data.quotes)) data.quotes = [];
-    if (typeof data.narrative !== 'string') data.narrative = '';
 
     res.json(data);
   } catch (err) {

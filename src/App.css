@@ -362,6 +362,9 @@ body {
 .bucket-header h3 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--blue); }
 .bucket-count { font-size: 11px; color: var(--text-light); background: var(--border); padding: 1px 7px; border-radius: 10px; }
 .bucket-hint { font-size: 11px; color: var(--text-light); }
+.narrative-loading { display: flex; align-items: center; gap: 10px; padding: 20px; color: var(--text-light); font-size: 14px; }
+.narrative-error { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.narrative-error p { color: var(--red, #dc2626); font-size: 14px; margin: 0; }
 
 .bucket-input-full, .bucket-textarea {
   width: 100%;

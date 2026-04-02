@@ -6,15 +6,17 @@ export default function App() {
   const [step, setStep] = useState('input'); // 'input' | 'generating' | 'output'
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
+  const [tone, setTone] = useState('punchy');
 
-  const handleGenerate = async ({ text, length, tone }) => {
+  const handleGenerate = async ({ text, length, tone: selectedTone }) => {
+    setTone(selectedTone);
     setStep('generating');
     setError(null);
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, length, tone }),
+        body: JSON.stringify({ text, length, tone: selectedTone }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Generation failed');
@@ -84,7 +86,7 @@ export default function App() {
         )}
 
         {step === 'output' && data && (
-          <OutputPage initialData={data} onReset={handleReset} />
+          <OutputPage initialData={data} tone={tone} onReset={handleReset} />
         )}
       </main>
     </div>
