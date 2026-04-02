@@ -86,7 +86,6 @@ RULES:
     const message = await anthropic.messages.create({
       model: 'claude-opus-4-6',
       max_tokens: 4096,
-      thinking: { type: 'adaptive' },
       messages: [{ role: 'user', content: prompt }],
     });
 
