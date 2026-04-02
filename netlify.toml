@@ -6,6 +6,9 @@
 [functions]
   node_bundler = "esbuild"
 
+[functions."generate-narrative"]
+  timeout = 26
+
 # Route all /api/* calls to Netlify Functions
 [[redirects]]
   from = "/api/fetch-url"
