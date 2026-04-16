@@ -90,7 +90,7 @@ OUTPUT LENGTH: ${length.toUpperCase()} — ${lengthGuide[length] || lengthGuide.
 ${toneGuide[tone] || toneGuide.punchy}
 
 CASE STUDY TEXT:
-${text.substring(0, 20000)}
+${text.substring(0, 12000)}
 
 Return ONLY valid JSON. No markdown fences, no explanation, just the JSON object:
 

@@ -6,6 +6,9 @@
 [functions]
   node_bundler = "esbuild"
 
+[functions."generate"]
+  timeout = 26
+
 [functions."generate-narrative"]
   timeout = 26
 
