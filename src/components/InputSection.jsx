@@ -1,7 +1,27 @@
 import { useState, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import mammoth from 'mammoth';
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+
+const ACCEPTED_EXTENSIONS = ['.pdf', '.docx', '.txt'];
+
+function getFileExtension(file) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.pdf')) return 'pdf';
+  if (name.endsWith('.docx')) return 'docx';
+  if (name.endsWith('.doc')) return 'doc';
+  if (name.endsWith('.txt')) return 'txt';
+  return null;
+}
+
+function finalizeText(text, notEnoughMessage) {
+  const cleaned = text.replace(/[ \t]+/g, ' ').trim();
+  if (!cleaned || cleaned.length < 100) {
+    throw new Error(notEnoughMessage);
+  }
+  return cleaned.substring(0, 25000);
+}
 
 async function parsePDFInBrowser(file) {
   const arrayBuffer = await file.arrayBuffer();
@@ -12,11 +32,38 @@ async function parsePDFInBrowser(file) {
     const content = await page.getTextContent();
     pages.push(content.items.map(item => item.str).join(' '));
   }
-  const text = pages.join('\n\n').replace(/[ \t]+/g, ' ').trim();
-  if (!text || text.length < 100) {
-    throw new Error('Could not extract text from this PDF. It may be a scanned image — try the URL option instead.');
+  return finalizeText(
+    pages.join('\n\n'),
+    'Could not extract text from this PDF. It may be a scanned image — try the URL option instead.'
+  );
+}
+
+async function parseDocxInBrowser(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const result = await mammoth.extractRawText({ arrayBuffer });
+  return finalizeText(
+    result.value,
+    'Could not extract text from this document. It may be empty or corrupted.'
+  );
+}
+
+async function parseTxtInBrowser(file) {
+  const text = await file.text();
+  return finalizeText(
+    text,
+    'This text file has too little content to work with.'
+  );
+}
+
+async function parseFileInBrowser(file) {
+  const ext = getFileExtension(file);
+  if (ext === 'pdf') return parsePDFInBrowser(file);
+  if (ext === 'docx') return parseDocxInBrowser(file);
+  if (ext === 'txt') return parseTxtInBrowser(file);
+  if (ext === 'doc') {
+    throw new Error('Legacy .doc files aren\'t supported — please re-save as .docx, PDF, or plain text (.txt).');
   }
-  return text.substring(0, 25000);
+  throw new Error('Unsupported file type. Please upload a PDF, DOCX, or TXT file.');
 }
 
 const LENGTH_OPTIONS = [
@@ -33,9 +80,9 @@ const TONE_OPTIONS = [
 ];
 
 export default function InputSection({ onGenerate }) {
-  const [mode, setMode] = useState('url'); // 'url' | 'pdf'
+  const [mode, setMode] = useState('url'); // 'url' | 'file'
   const [url, setUrl] = useState('');
-  const [pdfFile, setPdfFile] = useState(null);
+  const [file, setFile] = useState(null);
   const [length, setLength] = useState('strong');
   const [tone, setTone] = useState('punchy');
   const [loading, setLoading] = useState(false);
@@ -59,11 +106,11 @@ export default function InputSection({ onGenerate }) {
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || 'Failed to fetch URL');
-        if (!json.text || json.text.length < 100) throw new Error('Could not extract enough content from that URL. Try copying the text and using the PDF upload instead.');
+        if (!json.text || json.text.length < 100) throw new Error('Could not extract enough content from that URL. Try uploading a PDF, DOCX, or TXT file instead.');
         text = json.text;
       } else {
-        if (!pdfFile) throw new Error('Please select a PDF file');
-        text = await parsePDFInBrowser(pdfFile);
+        if (!file) throw new Error('Please select a file');
+        text = await parseFileInBrowser(file);
       }
 
       await onGenerate({ text, length, tone });
@@ -74,25 +121,28 @@ export default function InputSection({ onGenerate }) {
     }
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file && file.type !== 'application/pdf') {
-      setError('Please select a PDF file');
+  const validateAndSetFile = (candidate) => {
+    if (!candidate) return;
+    const ext = getFileExtension(candidate);
+    if (ext === 'doc') {
+      setError('Legacy .doc files aren\'t supported — please re-save as .docx, PDF, or plain text (.txt).');
       return;
     }
-    setPdfFile(file || null);
+    if (!ACCEPTED_EXTENSIONS.some(e => candidate.name.toLowerCase().endsWith(e))) {
+      setError('Please select a PDF, DOCX, or TXT file');
+      return;
+    }
+    setFile(candidate);
     setError(null);
+  };
+
+  const handleFileChange = (e) => {
+    validateAndSetFile(e.target.files[0] || null);
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file && file.type === 'application/pdf') {
-      setPdfFile(file);
-      setError(null);
-    } else {
-      setError('Please drop a PDF file');
-    }
+    validateAndSetFile(e.dataTransfer.files[0] || null);
   };
 
   return (
@@ -100,7 +150,7 @@ export default function InputSection({ onGenerate }) {
       <div className="input-card">
         <div className="input-card-header">
           <h2>Import Case Study</h2>
-          <p>Paste a URL or upload a PDF to get started</p>
+          <p>Paste a URL or upload a file to get started</p>
         </div>
 
         <form onSubmit={handleSubmit} className="input-form">
@@ -115,10 +165,10 @@ export default function InputSection({ onGenerate }) {
             </button>
             <button
               type="button"
-              className={`mode-btn ${mode === 'pdf' ? 'active' : ''}`}
-              onClick={() => { setMode('pdf'); setError(null); }}
+              className={`mode-btn ${mode === 'file' ? 'active' : ''}`}
+              onClick={() => { setMode('file'); setError(null); }}
             >
-              📄 PDF
+              📄 File
             </button>
           </div>
 
@@ -139,12 +189,12 @@ export default function InputSection({ onGenerate }) {
             </div>
           )}
 
-          {/* PDF upload */}
-          {mode === 'pdf' && (
+          {/* File upload */}
+          {mode === 'file' && (
             <div className="field">
-              <label>PDF File</label>
+              <label>Case Study File</label>
               <div
-                className={`drop-zone ${pdfFile ? 'has-file' : ''}`}
+                className={`drop-zone ${file ? 'has-file' : ''}`}
                 onDrop={handleDrop}
                 onDragOver={e => e.preventDefault()}
                 onClick={() => fileRef.current.click()}
@@ -152,21 +202,21 @@ export default function InputSection({ onGenerate }) {
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="application/pdf"
+                  accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
                   onChange={handleFileChange}
                   style={{ display: 'none' }}
                 />
-                {pdfFile ? (
+                {file ? (
                   <div className="file-selected">
                     <span className="file-icon">📄</span>
                     <div>
-                      <div className="file-name">{pdfFile.name}</div>
-                      <div className="file-size">{(pdfFile.size / 1024).toFixed(0)} KB</div>
+                      <div className="file-name">{file.name}</div>
+                      <div className="file-size">{(file.size / 1024).toFixed(0)} KB</div>
                     </div>
                     <button
                       type="button"
                       className="file-clear"
-                      onClick={e => { e.stopPropagation(); setPdfFile(null); }}
+                      onClick={e => { e.stopPropagation(); setFile(null); }}
                     >✕</button>
                   </div>
                 ) : (
@@ -175,7 +225,7 @@ export default function InputSection({ onGenerate }) {
                     <div>
                       <strong>Click to upload</strong> or drag and drop
                     </div>
-                    <div className="drop-hint">PDF files only, up to 50MB</div>
+                    <div className="drop-hint">PDF, DOCX, or TXT files, up to 50MB</div>
                   </div>
                 )}
               </div>
